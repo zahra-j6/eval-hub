@@ -214,7 +214,7 @@ func (a *apiFeature) startLocalServer(port int) error {
 		return logError(fmt.Errorf("failed to load collection configs: %w", err))
 	}
 
-	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs, nil)
+	runtime, err := runtimes.NewRuntime(logger, serviceConfig, providerConfigs, collectionConfigs)
 	if err != nil {
 		return logError(fmt.Errorf("failed to create runtime: %w", err))
 	}
