@@ -59,7 +59,10 @@ func (h *Handlers) HandleCreateEvaluation(ctx *executioncontext.ExecutionContext
 			resolveProvider := func(providerID string) (*api.ProviderResource, error) {
 				return common.ResolveProvider(providerID, h.providerConfigs, storage)
 			}
-			return h.validateBenchmarkReferences(evaluation, storage.GetCollection, resolveProvider)
+			resolveCollection := func(id string) (*api.CollectionResource, error) {
+				return common.ResolveCollection(id, h.collectionConfigs, storage)
+			}
+			return h.validateBenchmarkReferences(evaluation, resolveCollection, resolveProvider)
 		},
 		"validation",
 		"validate-evaluation-job",
