@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"strings"
 	"time"
 
 	// import the postgres driver - "pgx"
@@ -43,6 +45,7 @@ type sqlStorage struct {
 	tenant            api.Tenant
 	owner             api.User
 	maxArgLength      int
+	isolationLevel    sql.IsolationLevel
 }
 
 func NewStorage(
@@ -128,6 +131,11 @@ func NewStorage(
 		}
 	}
 
+	isolationLevel, err := getIsolationLevel(os.Getenv("DEBUG_SQL_ISOLATION_LEVEL"), &sqlConfig, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	s := &sqlStorage{
 		sqlConfig:         &sqlConfig,
 		statementsFactory: statementsFactory,
@@ -135,6 +143,7 @@ func NewStorage(
 		logger:            logger,
 		ctx:               context.Background(),
 		maxArgLength:      512,
+		isolationLevel:    isolationLevel,
 	}
 
 	// ping the database to verify the DSN provided by the user is valid and the server is accessible
@@ -157,6 +166,39 @@ func NewStorage(
 
 	success = true
 	return s, nil
+}
+
+func getIsolationLevel(isolationLevel string, config *shared.SQLDatabaseConfig, logger *slog.Logger) (sql.IsolationLevel, error) {
+	// for testing purposes only
+	isolationLevel = strings.TrimSpace(isolationLevel)
+	if isolationLevel != "" {
+		levels := []sql.IsolationLevel{
+			sql.LevelDefault,
+			sql.LevelReadUncommitted,
+			sql.LevelReadCommitted,
+			sql.LevelWriteCommitted,
+			sql.LevelRepeatableRead,
+			sql.LevelSnapshot,
+			sql.LevelSerializable,
+			sql.LevelLinearizable,
+		}
+		for _, level := range levels {
+			if strings.EqualFold(isolationLevel, level.String()) {
+				return level, nil
+			}
+		}
+		logger.Error("Invalid isolation level", "isolation_level", isolationLevel)
+		return sql.LevelDefault, fmt.Errorf("invalid isolation level: %s", isolationLevel)
+	}
+
+	switch config.Driver {
+	case SQLITE_DRIVER:
+		return sql.LevelDefault, nil
+	case POSTGRES_DRIVER:
+		return sql.LevelSerializable, nil
+	default:
+		return sql.LevelDefault, nil
+	}
 }
 
 // Ping the database to verify DSN provided by the user is valid and the
@@ -299,6 +341,7 @@ func (s *sqlStorage) WithLogger(logger *slog.Logger) abstractions.Storage {
 		tenant:            s.tenant,
 		owner:             s.owner,
 		maxArgLength:      s.maxArgLength,
+		isolationLevel:    s.isolationLevel,
 	}
 }
 
@@ -312,6 +355,7 @@ func (s *sqlStorage) WithContext(ctx context.Context) abstractions.Storage {
 		tenant:            s.tenant,
 		owner:             s.owner,
 		maxArgLength:      s.maxArgLength,
+		isolationLevel:    s.isolationLevel,
 	}
 }
 
@@ -325,6 +369,7 @@ func (s *sqlStorage) WithTenant(tenant api.Tenant) abstractions.Storage {
 		tenant:            tenant,
 		owner:             s.owner,
 		maxArgLength:      s.maxArgLength,
+		isolationLevel:    s.isolationLevel,
 	}
 }
 
@@ -338,5 +383,6 @@ func (s *sqlStorage) WithOwner(owner api.User) abstractions.Storage {
 		tenant:            s.tenant,
 		owner:             owner,
 		maxArgLength:      s.maxArgLength,
+		isolationLevel:    s.isolationLevel,
 	}
 }
